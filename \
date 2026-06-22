@@ -20,8 +20,27 @@ static bool is_balanced(unsigned char* c) {
     return ballance == 0;
 }
 
-void build_jump_table(unsigned char* prog, size_t* jump_table)
-{ 
+int main(int argc, char* argv[])
+{
+    unsigned char memory[MEMORY_SIZE] = {0};
+    size_t pointer = 0;
+
+   
+    if (argc < 2) {
+        fprintf(stderr, "ERROR: missing input file\n");
+        exit(EXIT_FAILURE);
+    }
+
+    if (!is_balanced(argv[1])) {
+        fprintf(stderr, "ERROR: unbalanced '[' ']'\n");
+        exit(EXIT_FAILURE);
+    }
+
+    size_t jump_table[strlen(argv[1]) + 1];
+    for (size_t i = 0; i < strlen(argv[1]) + 1; ++i)
+        jump_table[i] = 0;
+    unsigned char* prog = argv[1];
+    //breakpoint();
     for (size_t addr = 0; prog[addr]; ++addr) {
         switch (prog[addr]) {
             case '[': {
@@ -58,15 +77,15 @@ void build_jump_table(unsigned char* prog, size_t* jump_table)
                       // nothing
         }
     }
-}
 
-void interprete(unsigned char* prog, size_t* jump_table)
-{
-    unsigned char memory[MEMORY_SIZE] = {0};
-    size_t pointer = 0;
+    //for (size_t i = 0; i < strlen(argv[1]) + 1; ++i) {
+    //    printf("%d ", jump_table[i]);
+    //}
    
-    for (size_t addr = 0; prog[addr]; ++addr) {
-        switch(prog[addr]) {
+    //exit(EXIT_SUCCESS);
+   
+    for (size_t addr = 0; argv[1][addr]; ++addr) {
+        switch(argv[1][addr]) {
             case '>':
                 pointer += 1;
                 if (pointer >= MEMORY_SIZE) {
@@ -114,27 +133,6 @@ void interprete(unsigned char* prog, size_t* jump_table)
                 // comment
         }
     }
-}
-
-int main(int argc, char* argv[])
-{
-    if (argc < 2) {
-        fprintf(stderr, "ERROR: missing input file\n");
-        exit(EXIT_FAILURE);
-    }
-
-    if (!is_balanced(argv[1])) {
-        fprintf(stderr, "ERROR: unbalanced '[' ']'\n");
-        exit(EXIT_FAILURE);
-    }
-
-    unsigned char* prog = argv[1];
-   
-    size_t jump_table[strlen(argv[1]) + 1];
-    build_jump_table(prog, jump_table);
-
-    interprete(prog, jump_table);
-
     return EXIT_SUCCESS;
 }
 
