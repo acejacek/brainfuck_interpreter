@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #define breakpoint()  asm ("int3; nop")
 #define MEMORY_SIZE 30000
@@ -116,6 +117,30 @@ void interprete(unsigned char* prog, size_t* jump_table)
     }
 }
 
+unsigned char* load_program(const char* fname)
+{
+    FILE* fp = fopen(fname, "rb");
+    if (!fp) {
+        perror("Can't open file");
+        exit(EXIT_FAILURE);   
+    }
+   
+    fseek(fp, 0L, SEEK_END);
+    long sz = ftell(fp);
+    rewind(fp);
+   
+    unsigned char* prog = calloc(sz + 2, sizeof(*prog));
+    if (!prog) {
+        fprintf(stderr, "ERROR: missing input file\n");
+        exit(EXIT_FAILURE);   
+    }
+
+    fread(prog, sz, 1, fp);
+    fclose(fp);
+   
+    return prog;
+}
+
 int main(int argc, char* argv[])
 {
     if (argc < 2) {
@@ -128,13 +153,14 @@ int main(int argc, char* argv[])
         exit(EXIT_FAILURE);
     }
 
-    unsigned char* prog = argv[1];
+    unsigned char* prog = load_program(argv[1]);
    
-    size_t jump_table[strlen(argv[1]) + 1];
+    size_t jump_table[strlen(prog) + 1];
     build_jump_table(prog, jump_table);
 
     interprete(prog, jump_table);
 
+    free(prog);
     return EXIT_SUCCESS;
 }
 
