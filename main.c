@@ -43,39 +43,20 @@ size_t* build_jump_table(unsigned char* prog, const size_t program_size)
     }
    
     for (size_t addr = 0; prog[addr]; ++addr) {
-        switch (prog[addr]) {
-            case '[': {
-                          int level = 0;
-                          for (size_t jumpto = addr + 1; ; ++jumpto) {
-                              if (prog[jumpto] == ']') {
-                                  if (level == 0) {
-                                      jump_table[addr] = jumpto;
-                                      break;
-                                  }
-                                  level--;
-                              }
-                              else if (prog[jumpto] == '[')
-                                  level++;
-                          }
-                      }
-                      break;
-            case ']': {
-                          int level = 0;
-                          for (size_t jumpto = addr - 1; ; --jumpto) {
-                              if (prog[jumpto] == '[') {
-                                  if (level == 0) {
-                                      jump_table[addr] = jumpto;
-                                      break;
-                                  }
-                                  level--;
-                              }
-                              else if (prog[jumpto] == ']')
-                                  level++;
-                          }
-                      }
-                      break;
-            default:
-                      // nothing
+        if (prog[addr] == '[') {
+            int level = 0;
+            for (size_t jumpto = addr + 1; ; ++jumpto) {
+                if (prog[jumpto] == ']') {
+                    if (level == 0) {
+                        jump_table[addr] = jumpto;
+                        jump_table[jumpto] = addr;
+                        break;
+                    }
+                    level--;
+                }
+                else if (prog[jumpto] == '[')
+                    level++;
+            }
         }
     }
     return jump_table;
