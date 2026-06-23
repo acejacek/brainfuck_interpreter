@@ -158,32 +158,7 @@ void interprete(uint8_t* prog, size_t* jump_table)
     free(m.memory);
 }
 
-uint8_t* load_program(const char* fname, size_t* program_size)
-{
-    FILE* fp = fopen(fname, "rb");
-    if (!fp) {
-        perror("Can't open file");
-        exit(EXIT_FAILURE);   
-    }
-   
-    fseek(fp, 0L, SEEK_END);
-    *program_size = ftell(fp);
-    rewind(fp);
-   
-    uint8_t* prog = calloc(*program_size + 1, sizeof(*prog));
-    if (!prog) {
-        fprintf(stderr, "ERROR: Buy more ram\n");
-        fclose(fp);
-        exit(EXIT_FAILURE);   
-    }
-
-    fread(prog, *program_size, 1, fp);
-    fclose(fp);
-   
-    return prog;
-}
-
-uint8_t* load_stream(size_t* program_size)
+uint8_t* load_program(FILE* f, size_t* program_size)
 {
     const size_t chunk = 1024;
     uint8_t* prog = NULL;
@@ -192,7 +167,7 @@ uint8_t* load_stream(size_t* program_size)
    
     int c = 0;
     do {
-        c = fgetc(stdin);
+        c = fgetc(f);
 
         if (c == EOF)
             c = 0;
@@ -221,10 +196,17 @@ int main(int argc, char* argv[])
     size_t program_size = 0;
    
     if (argc == 1)
-        prog = load_stream(&program_size);
-    else
-        prog = load_program(argv[1], &program_size);
-
+        prog = load_program(stdin, &program_size);
+    else {
+        FILE* f = fopen(argv[1], "r");
+        if (!f) {
+            perror("Can't open file");
+            exit(EXIT_FAILURE);   
+        }
+        prog = load_program(f, &program_size);
+        fclose(f);
+    }
+   
     if (!is_balanced(prog))
         exit(EXIT_FAILURE);
 
