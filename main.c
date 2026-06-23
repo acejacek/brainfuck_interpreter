@@ -177,20 +177,50 @@ unsigned char* load_program(const char* fname, size_t* program_size)
     return prog;
 }
 
+unsigned char* load_stream(size_t* program_size)
+{
+    const size_t chunk = 10000;
+    *program_size = 0;
+    size_t allocated = chunk;
+    unsigned char* prog = malloc(allocated * sizeof(*prog));
+   
+    int c = 0;
+    do {
+        c = fgetc(stdin);
+
+        if (c == EOF) c = 0;
+
+        if (*program_size >= allocated) {
+            allocated += chunk;
+            prog = realloc(prog, allocated * sizeof(*prog));
+            if (!prog) {
+                fprintf(stderr, "ERROR: Buy more ram\n");
+                exit(EXIT_FAILURE);   
+            }
+        }
+        prog[*program_size++] = (unsigned char)c;
+        //*program_size += 1;
+               
+    } while (c);
+   
+    return prog;
+}
+
 int main(int argc, char* argv[])
 {
-    if (argc < 2) {
-        fprintf(stderr, "ERROR: missing input file\n");
-        exit(EXIT_FAILURE);
-    }
+    size_t program_size = 0;
+    unsigned char* prog = NULL;
+   
+    if (argc == 1)
+        prog = load_stream(&program_size);
+    else
+        prog = load_program(argv[1], &program_size);
 
-    if (!is_balanced(argv[1])) {
+    if (!is_balanced(prog)) {
         fprintf(stderr, "ERROR: unbalanced '[' ']'\n");
         exit(EXIT_FAILURE);
     }
 
-    size_t program_size;
-    unsigned char* prog = load_program(argv[1], &program_size);
     size_t* jump_table = build_jump_table(prog, program_size);
 
     interprete(prog, jump_table);
