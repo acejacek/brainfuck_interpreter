@@ -4,11 +4,10 @@
 #include <unistd.h>
 
 #define breakpoint()  asm ("int3; nop")
-#define MEMORY_SIZE 100
+#define MEMORY_SIZE 30
 
 typedef struct {
     unsigned char* memory;
-    size_t size;
     size_t capacity;
 } Memory;
 
@@ -62,26 +61,28 @@ size_t* build_jump_table(unsigned char* prog, const size_t program_size)
     return jump_table;
 }
 
-void check_memory(Memory* m, const size_t growth)
+void check_memory(Memory* m, const size_t expected)
 {
-    if (m->capacity < m->size + growth) {
-        if (m->memory == NULL) {
-            m->memory = calloc(growth, sizeof(*(m->memory)));
-            if (!m->memory) {
-                fprintf(stderr, "ERROR: Buy more ram");
-                exit(EXIT_FAILURE);
-            }
-            m->capacity = growth;
-        }
-        else {
-            m->capacity *= 2;
-            m->memory = realloc(m->memory, m->capacity * (sizeof(*m->memory)));
-            if (!m->memory) {
-                fprintf(stderr, "ERROR: Buy more ram");
-                exit(EXIT_FAILURE);
-            }
-        }
+    if (m->capacity >= expected) return;
+
+    size_t new_capacity = expected;
+    if (m->memory != NULL) 
+        new_capacity = m->capacity * 2;
+    
+    // no realloc, as memory must be zeroed when initialized 
+    unsigned char* new_memory = calloc(new_capacity, sizeof(*new_memory));
+    if (!new_memory) {
+        fprintf(stderr, "ERROR: Buy more ram");
+        exit(EXIT_FAILURE);
     }
+   
+    if (m->memory != NULL) { 
+        memcpy(new_memory, m->memory, m->capacity);
+        free(m->memory);
+    }
+
+    m->memory = new_memory;
+    m->capacity = new_capacity;
 }
 
 void interprete(unsigned char* prog, size_t* jump_table)
@@ -94,8 +95,8 @@ void interprete(unsigned char* prog, size_t* jump_table)
     for (size_t addr = 0; prog[addr]; ++addr) {
         switch(prog[addr]) {
             case '>':
-                check_memory(&m, 1);
                 pointer += 1;
+                check_memory(&m, pointer);
                 break;
             case '<':
                 if (pointer == 0) {
