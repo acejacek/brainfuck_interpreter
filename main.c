@@ -13,18 +13,25 @@ typedef struct {
 } Memory;
 
 static bool is_balanced(unsigned char* c) {
-    int ballance = 0;
+    int balance = 0;
     for (; *c; ++c) {
         if (*c == '[')
-            ballance++;
+            balance++;
         if (*c == ']') {
-            ballance--;
-            if (ballance < 0)
+            balance--;
+            if (balance < 0) {
+                fprintf(stderr, "ERROR: Unbalanced ']'\n");
                 return false;
+            }
         }
     }
    
-    return ballance == 0;
+    if (balance) {
+        fprintf(stderr, "ERROR: Unbalanced '['\n");
+        return false;
+    }
+   
+    return true;
 }
 
 size_t* build_jump_table(unsigned char* prog, const size_t program_size)
@@ -198,8 +205,8 @@ unsigned char* load_stream(size_t* program_size)
                 exit(EXIT_FAILURE);   
             }
         }
-        prog[*program_size++] = (unsigned char)c;
-        //*program_size += 1;
+        prog[*program_size] = (unsigned char)c;
+        *program_size += 1;
                
     } while (c);
    
@@ -216,10 +223,8 @@ int main(int argc, char* argv[])
     else
         prog = load_program(argv[1], &program_size);
 
-    if (!is_balanced(prog)) {
-        fprintf(stderr, "ERROR: unbalanced '[' ']'\n");
+    if (!is_balanced(prog))
         exit(EXIT_FAILURE);
-    }
 
     size_t* jump_table = build_jump_table(prog, program_size);
 
