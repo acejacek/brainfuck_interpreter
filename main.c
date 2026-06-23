@@ -1,17 +1,34 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
+#include <stdint.h>
 
-#define breakpoint()  asm ("int3; nop")
 #define MEMORY_SIZE 30
 
 typedef struct {
-    unsigned char* memory;
+    uint8_t* memory;
     size_t capacity;
 } Memory;
+static 
+bool is_valid_code(uint8_t c)
+{
+    switch (c) {
+        case '+': 
+        case '-': 
+        case '>': 
+        case '<': 
+        case '.': 
+        case ',': 
+        case '[': 
+        case ']': 
+            return true;
+            break;
+        default:
+    }
+    return false;
+}
 
-static bool is_balanced(unsigned char* c) {
+bool is_balanced(uint8_t* c) {
     int balance = 0;
     for (; *c; ++c) {
         if (*c == '[')
@@ -33,7 +50,7 @@ static bool is_balanced(unsigned char* c) {
     return true;
 }
 
-size_t* build_jump_table(unsigned char* prog, const size_t program_size)
+size_t* build_jump_table(uint8_t* prog, const size_t program_size)
 {
     size_t* jump_table = malloc(program_size * sizeof(*jump_table));
     if (!jump_table) {
@@ -66,11 +83,11 @@ void check_memory(Memory* m, const size_t expected)
     if (m->capacity >= expected) return;
 
     size_t new_capacity = expected;
-    if (m->memory != NULL) 
+    if (m->capacity) 
         new_capacity = m->capacity * 2;
     
     // no realloc, as memory must be zeroed when initialized 
-    unsigned char* new_memory = calloc(new_capacity, sizeof(*new_memory));
+    uint8_t* new_memory = calloc(new_capacity, sizeof(*new_memory));
     if (!new_memory) {
         fprintf(stderr, "ERROR: Buy more ram");
         exit(EXIT_FAILURE);
@@ -85,7 +102,7 @@ void check_memory(Memory* m, const size_t expected)
     m->capacity = new_capacity;
 }
 
-void interprete(unsigned char* prog, size_t* jump_table)
+void interprete(uint8_t* prog, size_t* jump_table)
 {
     Memory m = { 0 };
     check_memory(&m, MEMORY_SIZE);
@@ -141,7 +158,7 @@ void interprete(unsigned char* prog, size_t* jump_table)
     free(m.memory);
 }
 
-unsigned char* load_program(const char* fname, size_t* program_size)
+uint8_t* load_program(const char* fname, size_t* program_size)
 {
     FILE* fp = fopen(fname, "rb");
     if (!fp) {
@@ -150,35 +167,38 @@ unsigned char* load_program(const char* fname, size_t* program_size)
     }
    
     fseek(fp, 0L, SEEK_END);
-    *program_size = ftell(fp) + 2;
+    *program_size = ftell(fp);
     rewind(fp);
    
-    unsigned char* prog = calloc(*program_size, sizeof(*prog));
+    uint8_t* prog = calloc(*program_size + 1, sizeof(*prog));
     if (!prog) {
         fprintf(stderr, "ERROR: Buy more ram\n");
         fclose(fp);
         exit(EXIT_FAILURE);   
     }
 
-    fread(prog, *program_size - 2, 1, fp);
+    fread(prog, *program_size, 1, fp);
     fclose(fp);
    
     return prog;
 }
 
-unsigned char* load_stream(size_t* program_size)
+uint8_t* load_stream(size_t* program_size)
 {
-    const size_t chunk = 10000;
+    const size_t chunk = 1024;
+    uint8_t* prog = NULL;
     *program_size = 0;
-    size_t allocated = chunk;
-    unsigned char* prog = malloc(allocated * sizeof(*prog));
+    size_t allocated = 0;
    
     int c = 0;
     do {
         c = fgetc(stdin);
 
-        if (c == EOF) c = 0;
-
+        if (c == EOF)
+            c = 0;
+        else if (!is_valid_code(c))
+            continue;
+       
         if (*program_size >= allocated) {
             allocated += chunk;
             prog = realloc(prog, allocated * sizeof(*prog));
@@ -187,7 +207,7 @@ unsigned char* load_stream(size_t* program_size)
                 exit(EXIT_FAILURE);   
             }
         }
-        prog[*program_size] = (unsigned char)c;
+        prog[*program_size] = (uint8_t)c;
         *program_size += 1;
                
     } while (c);
@@ -197,8 +217,8 @@ unsigned char* load_stream(size_t* program_size)
 
 int main(int argc, char* argv[])
 {
+    uint8_t* prog = NULL;
     size_t program_size = 0;
-    unsigned char* prog = NULL;
    
     if (argc == 1)
         prog = load_stream(&program_size);
