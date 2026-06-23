@@ -1,4 +1,5 @@
+bf
 tags
 *.swp
 a.out
-
+*.o
