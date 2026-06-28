@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <error.h>
 
 #define MEMORY_SIZE 30
 
@@ -9,8 +10,8 @@ typedef struct {
     uint8_t* memory;
     size_t capacity;
 } Memory;
-static 
-bool is_valid_code(uint8_t c)
+
+bool is_valid_code(const uint8_t c)
 {
     switch (c) {
         case '+': 
@@ -22,8 +23,6 @@ bool is_valid_code(uint8_t c)
         case '[': 
         case ']': 
             return true;
-            break;
-        default:
     }
     return false;
 }
@@ -43,7 +42,7 @@ bool is_balanced(uint8_t* c) {
     }
    
     if (balance) {
-        fprintf(stderr, "ERROR: Unbalanced '['\n");
+        error(0, 0, "ERROR: Unbalanced '['\n");
         return false;
     }
    
@@ -115,19 +114,23 @@ void interprete(uint8_t* prog, size_t* jump_table)
                 pointer += 1;
                 check_memory(&m, pointer);
                 break;
+
             case '<':
                 if (pointer == 0) {
-                    fprintf(stderr, "ERROR: move pointer before memory begin'\n");
+                    fprintf(stderr, "ERROR: move pointer before memory start'\n");
                     exit(EXIT_FAILURE);
                 }
                 pointer -= 1;
                 break;
+
             case '+':
                 m.memory[pointer] += 1;
                 break;
+
             case '-':
                 m.memory[pointer] -= 1;
                 break;
+
             case '.':
                 putchar(m.memory[pointer]);
                 break;
@@ -152,7 +155,7 @@ void interprete(uint8_t* prog, size_t* jump_table)
                 break;
                
             default:
-                // comment
+                // unreachable (comments removed from program)
         }
     }
     free(m.memory);
@@ -160,7 +163,7 @@ void interprete(uint8_t* prog, size_t* jump_table)
 
 uint8_t* load_program(FILE* f, size_t* program_size)
 {
-    const size_t chunk = 1024;
+    const size_t chunk = 512;
     uint8_t* prog = NULL;
     *program_size = 0;
     size_t allocated = 0;
@@ -190,23 +193,8 @@ uint8_t* load_program(FILE* f, size_t* program_size)
     return prog;
 }
 
-int main(int argc, char* argv[])
+void execute(uint8_t* prog, size_t program_size)
 {
-    uint8_t* prog = NULL;
-    size_t program_size = 0;
-   
-    if (argc == 1)
-        prog = load_program(stdin, &program_size);
-    else {
-        FILE* f = fopen(argv[1], "r");
-        if (!f) {
-            perror("Can't open file");
-            exit(EXIT_FAILURE);   
-        }
-        prog = load_program(f, &program_size);
-        fclose(f);
-    }
-   
     if (!is_balanced(prog))
         exit(EXIT_FAILURE);
 
@@ -216,6 +204,53 @@ int main(int argc, char* argv[])
 
     free(prog);
     free(jump_table);
+}
+
+void help(const char* binary)
+{
+    printf("Usage: %s [FILE]...\n", binary);
+    puts("Brainfuck interpreter. Execute FILE(s), with result printed to standard output.\n");
+    puts("With no FILE, or when FILE is -, read standard input.");
+    puts("  --help\tdisplay this help and exit");
+    puts("\nExamples:");
+    printf("  %s HelloWorld.bf\n", binary);
+    printf("  cat HelloWorld.bf | %s\n", binary);
+
+    exit(EXIT_SUCCESS);
+}
+
+int main(int argc, char* argv[])
+{
+    uint8_t* prog = NULL;
+    size_t program_size = 0;
+   
+    if (argc == 1) {
+        prog = load_program(stdin, &program_size);
+        execute(prog, program_size);
+    }
+    else {
+        if (strcmp(argv[1], "--help") == 0)
+            help(argv[0]);
+       
+        if (strcmp(argv[1], "-") == 0) {
+            prog = load_program(stdin, &program_size);
+            execute(prog, program_size);
+            exit(EXIT_SUCCESS);
+        }  
+       
+        for (int p = 1; p < argc; ++p) {
+            FILE* f = fopen(argv[1], "r");
+            if (!f) {
+                perror("ERROR: Can't open file");
+                exit(EXIT_FAILURE);   
+            }
+            prog = load_program(f, &program_size);
+            fclose(f);
+           
+            execute(prog, program_size);
+        }
+    }
+   
     return EXIT_SUCCESS;
 }
 
