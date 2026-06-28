@@ -172,13 +172,13 @@ Program load_program(FILE* f)
     Program prog = { 0 };
     size_t allocated = 0;
    
-    int c = 0;
-    do {
-        c = fgetc(f);
+    while (1) {
+        int c = fgetc(f);
 
         if (c == EOF)
-            c = 0;
-        else if (!is_valid_code(c))
+            break;
+
+        if (!is_valid_code(c))
             continue;
        
         if (prog.size >= allocated) {
@@ -191,8 +191,7 @@ Program load_program(FILE* f)
         }
         prog.code[prog.size] = (uint8_t)c;
         prog.size += 1;
-               
-    } while (c);
+    }
    
     return prog;
 }
