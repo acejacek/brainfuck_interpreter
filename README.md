@@ -1,13 +1,17 @@
 # Brainfuck interpreter
 
-Complie with `make`.
+First, compile it with `make`:
+```sh
+make
+./bf --help
+```
 
-Interpreter accepts programs as parameter:
+Interpreter accepts program, or programs, as parameter:
 ```sh
 ./bf HelloWorld.bf
 ```
 
-Alternativelly, program can be passed via pipe:
+Alternatively, program can be passed via pipe:
 
 ```sh
 echo "++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.>---.+++++++..+++.>>.<-.<.+++.------.--------.>>+.>++." | ./bf
