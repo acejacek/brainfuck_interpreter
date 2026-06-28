@@ -11,6 +11,11 @@ typedef struct {
     size_t capacity;
 } Memory;
 
+typedef struct {
+    uint8_t* code;
+    size_t size;
+} Program;
+
 bool is_valid_code(const uint8_t c)
 {
     switch (c) {
@@ -27,12 +32,12 @@ bool is_valid_code(const uint8_t c)
     return false;
 }
 
-bool is_balanced(uint8_t* c) {
+bool is_balanced(const Program prog) {
     int balance = 0;
-    for (; *c; ++c) {
-        if (*c == '[')
+    for (size_t addr = 0;  addr < prog.size; ++addr) {
+        if (prog.code[addr] == '[')
             balance++;
-        if (*c == ']') {
+        if (prog.code[addr] == ']') {
             balance--;
             if (balance < 0) {
                 fprintf(stderr, "ERROR: Unbalanced ']'\n");
@@ -49,19 +54,19 @@ bool is_balanced(uint8_t* c) {
     return true;
 }
 
-size_t* build_jump_table(uint8_t* prog, const size_t program_size)
+size_t* build_jump_table(const Program prog)
 {
-    size_t* jump_table = malloc(program_size * sizeof(*jump_table));
+    size_t* jump_table = malloc(prog.size * sizeof(*jump_table));
     if (!jump_table) {
         fprintf(stderr, "ERROR: Buy more ram");
         exit(EXIT_FAILURE);
     }
    
-    for (size_t addr = 0; prog[addr]; ++addr) {
-        if (prog[addr] == '[') {
+    for (size_t addr = 0; addr < prog.size; ++addr) {
+        if (prog.code[addr] == '[') {
             int level = 0;
             for (size_t jumpto = addr + 1; ; ++jumpto) {
-                if (prog[jumpto] == ']') {
+                if (prog.code[jumpto] == ']') {
                     if (level == 0) {
                         jump_table[addr] = jumpto;
                         jump_table[jumpto] = addr;
@@ -69,7 +74,7 @@ size_t* build_jump_table(uint8_t* prog, const size_t program_size)
                     }
                     level--;
                 }
-                else if (prog[jumpto] == '[')
+                else if (prog.code[jumpto] == '[')
                     level++;
             }
         }
@@ -101,15 +106,15 @@ void check_memory(Memory* m, const size_t expected)
     m->capacity = new_capacity;
 }
 
-void interprete(uint8_t* prog, size_t* jump_table)
+void interprete(Program prog, size_t* jump_table)
 {
     Memory m = { 0 };
     check_memory(&m, MEMORY_SIZE);
    
     size_t pointer = 0;
    
-    for (size_t addr = 0; prog[addr]; ++addr) {
-        switch(prog[addr]) {
+    for (size_t addr = 0; addr < prog.size; ++addr) {
+        switch(prog.code[addr]) {
             case '>':
                 pointer += 1;
                 check_memory(&m, pointer);
@@ -161,11 +166,10 @@ void interprete(uint8_t* prog, size_t* jump_table)
     free(m.memory);
 }
 
-uint8_t* load_program(FILE* f, size_t* program_size)
+Program load_program(FILE* f)
 {
     const size_t chunk = 512;
-    uint8_t* prog = NULL;
-    *program_size = 0;
+    Program prog = { 0 };
     size_t allocated = 0;
    
     int c = 0;
@@ -177,32 +181,32 @@ uint8_t* load_program(FILE* f, size_t* program_size)
         else if (!is_valid_code(c))
             continue;
        
-        if (*program_size >= allocated) {
+        if (prog.size >= allocated) {
             allocated += chunk;
-            prog = realloc(prog, allocated * sizeof(*prog));
-            if (!prog) {
+            prog.code = realloc(prog.code, allocated * sizeof(*prog.code));
+            if (!prog.code) {
                 fprintf(stderr, "ERROR: Buy more ram\n");
                 exit(EXIT_FAILURE);   
             }
         }
-        prog[*program_size] = (uint8_t)c;
-        *program_size += 1;
+        prog.code[prog.size] = (uint8_t)c;
+        prog.size += 1;
                
     } while (c);
    
     return prog;
 }
 
-void execute(uint8_t* prog, size_t program_size)
+void execute(Program prog)
 {
     if (!is_balanced(prog))
         exit(EXIT_FAILURE);
 
-    size_t* jump_table = build_jump_table(prog, program_size);
+    size_t* jump_table = build_jump_table(prog);
 
     interprete(prog, jump_table);
 
-    free(prog);
+    free(prog.code);
     free(jump_table);
 }
 
@@ -221,20 +225,19 @@ void help(const char* binary)
 
 int main(int argc, char* argv[])
 {
-    uint8_t* prog = NULL;
-    size_t program_size = 0;
+    Program prog;
    
     if (argc == 1) {
-        prog = load_program(stdin, &program_size);
-        execute(prog, program_size);
+        prog = load_program(stdin);
+        execute(prog);
     }
     else {
         if (strcmp(argv[1], "--help") == 0)
             help(argv[0]);
        
         if (strcmp(argv[1], "-") == 0) {
-            prog = load_program(stdin, &program_size);
-            execute(prog, program_size);
+            prog = load_program(stdin);
+            execute(prog);
             exit(EXIT_SUCCESS);
         }  
        
@@ -244,10 +247,10 @@ int main(int argc, char* argv[])
                 perror("ERROR: Can't open file");
                 exit(EXIT_FAILURE);   
             }
-            prog = load_program(f, &program_size);
+            prog = load_program(f);
             fclose(f);
            
-            execute(prog, program_size);
+            execute(prog);
         }
     }
    
