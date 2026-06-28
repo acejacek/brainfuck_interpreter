@@ -239,7 +239,7 @@ int main(int argc, char* argv[])
         }  
        
         for (int p = 1; p < argc; ++p) {
-            FILE* f = fopen(argv[1], "r");
+            FILE* f = fopen(argv[p], "r");
             if (!f) {
                 perror("ERROR: Can't open file");
                 exit(EXIT_FAILURE);   
