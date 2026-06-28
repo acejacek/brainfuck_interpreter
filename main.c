@@ -12,7 +12,12 @@ typedef struct {
 } Memory;
 
 typedef struct {
-    uint8_t* code;
+    uint8_t operand;
+    size_t param;
+} Code;
+
+typedef struct {
+    Code* code;
     size_t size;
 } Program;
 
@@ -35,9 +40,9 @@ bool is_valid_code(const uint8_t c)
 bool is_balanced(const Program prog) {
     int balance = 0;
     for (size_t addr = 0;  addr < prog.size; ++addr) {
-        if (prog.code[addr] == '[')
+        if (prog.code[addr].operand == '[')
             balance++;
-        if (prog.code[addr] == ']') {
+        if (prog.code[addr].operand == ']') {
             balance--;
             if (balance < 0) {
                 fprintf(stderr, "ERROR: Unbalanced ']'\n");
@@ -54,32 +59,25 @@ bool is_balanced(const Program prog) {
     return true;
 }
 
-size_t* build_jump_table(const Program prog)
+void precalculate_jumps(Program prog)
 {
-    size_t* jump_table = malloc(prog.size * sizeof(*jump_table));
-    if (!jump_table) {
-        fprintf(stderr, "ERROR: Buy more ram");
-        exit(EXIT_FAILURE);
-    }
-   
     for (size_t addr = 0; addr < prog.size; ++addr) {
-        if (prog.code[addr] == '[') {
+        if (prog.code[addr].operand == '[') {
             int level = 0;
             for (size_t jumpto = addr + 1; ; ++jumpto) {
-                if (prog.code[jumpto] == ']') {
+                if (prog.code[jumpto].operand == ']') {
                     if (level == 0) {
-                        jump_table[addr] = jumpto;
-                        jump_table[jumpto] = addr;
+                        prog.code[addr].param = jumpto;
+                        prog.code[jumpto].param = addr;
                         break;
                     }
                     level--;
                 }
-                else if (prog.code[jumpto] == '[')
+                else if (prog.code[jumpto].operand == '[')
                     level++;
             }
         }
     }
-    return jump_table;
 }
 
 void check_memory(Memory* m, const size_t expected)
@@ -106,57 +104,57 @@ void check_memory(Memory* m, const size_t expected)
     m->capacity = new_capacity;
 }
 
-void interprete(Program prog, size_t* jump_table)
+void interprete(Program prog)
 {
     Memory m = { 0 };
     check_memory(&m, MEMORY_SIZE);
-   
+  
     size_t pointer = 0;
    
     for (size_t addr = 0; addr < prog.size; ++addr) {
-        switch(prog.code[addr]) {
+        switch(prog.code[addr].operand) {
             case '>':
-                pointer += 1;
+                pointer += prog.code[addr].param;
                 check_memory(&m, pointer);
                 break;
 
             case '<':
-                if (pointer == 0) {
+                if ((long int)pointer - (long int)prog.code[addr].param < 0) {
                     fprintf(stderr, "ERROR: move pointer before memory start'\n");
                     exit(EXIT_FAILURE);
                 }
-                pointer -= 1;
+                pointer -= prog.code[addr].param;
                 break;
 
             case '+':
-                m.memory[pointer] += 1;
+                m.memory[pointer] += (uint8_t)prog.code[addr].param;
                 break;
 
             case '-':
-                m.memory[pointer] -= 1;
+                m.memory[pointer] -= (uint8_t)prog.code[addr].param;
                 break;
 
             case '.':
-                putchar(m.memory[pointer]);
+                for (size_t i = 0; i < prog.code[addr].param; ++i)
+                    putchar(m.memory[pointer]);
                 break;
                
-            case ',': {
-                          char x = getchar();
-                          if (x != EOF)
-                              m.memory[pointer] = x;
-                      }
+            case ',': 
+                for (size_t i = 0; i < prog.code[addr].param; ++i) {
+                    char x = getchar();
+                    if (x != EOF)
+                        m.memory[pointer] = x;
+                }
                 break;
 
             case '[':
-                if (m.memory[pointer] == 0) {
-                    addr = jump_table[addr];
-                }
+                if (m.memory[pointer] == 0)
+                    addr = prog.code[addr].param;
                 break;
                
             case ']':
-                if (m.memory[pointer] != 0) {
-                    addr = jump_table[addr];
-                }
+                if (m.memory[pointer] != 0)
+                    addr = prog.code[addr].param;
                 break;
                
             default:
@@ -171,16 +169,23 @@ Program load_program(FILE* f)
     const size_t chunk = 512;
     Program prog = { 0 };
     size_t allocated = 0;
+
+    uint8_t prev = 0;
    
     while (1) {
         int c = fgetc(f);
-
+       
         if (c == EOF)
             break;
-
+       
         if (!is_valid_code(c))
             continue;
-       
+
+        if (c == prev && (c != '[' && c != ']')) {
+            prog.code[prog.size - 1].param += 1;
+            continue;
+        }
+
         if (prog.size >= allocated) {
             allocated += chunk;
             prog.code = realloc(prog.code, allocated * sizeof(*prog.code));
@@ -189,8 +194,11 @@ Program load_program(FILE* f)
                 exit(EXIT_FAILURE);   
             }
         }
-        prog.code[prog.size] = (uint8_t)c;
+        prog.code[prog.size].operand = (uint8_t)c;
+        prog.code[prog.size].param = 1;
+
         prog.size += 1;
+        prev = c;
     }
    
     return prog;
@@ -201,12 +209,10 @@ void execute(Program prog)
     if (!is_balanced(prog))
         exit(EXIT_FAILURE);
 
-    size_t* jump_table = build_jump_table(prog);
-
-    interprete(prog, jump_table);
+    precalculate_jumps(prog);
+    interprete(prog);
 
     free(prog.code);
-    free(jump_table);
 }
 
 void help(const char* binary)
