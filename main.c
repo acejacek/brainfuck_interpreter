@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <error.h>
+#include <stdbool.h>
 
 #define MEMORY_SIZE 30
 
@@ -141,9 +142,9 @@ void interprete(Program prog)
                
             case ',': 
                 for (size_t i = 0; i < prog.code[addr].param; ++i) {
-                    char x = getchar();
+                    int x = getchar();
                     if (x != EOF)
-                        m.memory[pointer] = x;
+                        m.memory[pointer] = (uint8_t)x;
                 }
                 break;
 
