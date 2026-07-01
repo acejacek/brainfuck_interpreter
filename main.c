@@ -6,6 +6,26 @@
 #include <stdbool.h>
 
 #define MEMORY_SIZE 30
+#define DEBUG
+
+typedef enum optimizations {
+    OPTI_ZERO = 1,
+    OPTI_MOVL = 2,
+    OPTI_MOVR = 4,
+    OPTI_VOID = 8,
+} Optimization;
+
+typedef enum {
+    INST_INC = '+',
+    INST_DEC = '-',
+    INST_LFT = '<',
+    INST_RHT = '>',
+    INST_OUT = '.',
+    INST_INP = ',',
+    INST_JZE = '[',
+    INST_JNZ = ']',
+    INST_invalid = '?'
+} Instruction;
 
 typedef struct {
     uint8_t* memory;
@@ -14,6 +34,7 @@ typedef struct {
 
 typedef struct {
     uint8_t operand;
+    Instruction inst;
     size_t param;
 } Code;
 
@@ -81,6 +102,104 @@ void precalculate_jumps(Program prog)
     }
 }
 
+Program optimize(Program prog, Optimization opti)
+{
+    // [-] = set memory to zero Z
+
+    size_t opt[10] = {0};
+    for (size_t addr = 0; (opti & OPTI_ZERO) && addr < prog.size - 2; ++addr) {
+        if (prog.code[addr    ].operand == '[' &&
+            prog.code[addr + 1].operand == '-' &&
+            prog.code[addr + 2].operand == ']') {
+
+            prog.code[addr].operand = 'Z';
+
+            for (size_t to = addr + 1, from = addr + 3; from < prog.size; ++to, ++from) {
+                prog.code[to].operand = prog.code[from].operand;
+                prog.code[to].param = prog.code[from].param;
+            }
+
+            prog.size -= 2;
+            opt[0]++;
+        }
+    }
+    // [-<<<+>>>} = move momory 3 positions left
+    for (size_t addr = 0; (opti & OPTI_MOVL) && addr < prog.size - 5; ++addr) {
+        if (prog.code[addr    ].operand == '[' &&
+            prog.code[addr + 1].operand == '-' &&
+            prog.code[addr + 2].operand == '<' &&
+            prog.code[addr + 3].operand == '+' &&
+            prog.code[addr + 4].operand == '>' &&
+            prog.code[addr + 5].operand == ']' &&
+            prog.code[addr + 1]. param  ==  1  &&
+            prog.code[addr + 3]. param  ==  1) {
+
+            prog.code[addr].operand = 'M';
+            prog.code[addr].param = - prog.code[addr + 2].param;
+
+            for (size_t to = addr + 1, from = addr + 6; from < prog.size; ++to, ++from) {
+                prog.code[to].operand = prog.code[from].operand;
+                prog.code[to].param = prog.code[from].param;
+            }
+
+            prog.size -= 5;
+            opt[1]++;
+        }
+    }
+    // [->>>+<<<} = move momory 3 positions right
+    for (size_t addr = 0; (opti & OPTI_MOVR) && addr < prog.size - 5; ++addr) {
+        if (prog.code[addr    ].operand == '[' &&
+            prog.code[addr + 1].operand == '-' &&
+            prog.code[addr + 2].operand == '>' &&
+            prog.code[addr + 3].operand == '+' &&
+            prog.code[addr + 4].operand == '<' &&
+            prog.code[addr + 5].operand == ']' &&
+            prog.code[addr + 1]. param  ==  1  &&
+            prog.code[addr + 3]. param  ==  1) {
+
+            prog.code[addr].operand = 'M';
+            prog.code[addr].param = prog.code[addr + 2].param;
+
+            for (size_t to = addr + 1, from = addr + 6; from < prog.size; ++to, ++from) {
+                prog.code[to].operand = prog.code[from].operand;
+                prog.code[to].param = prog.code[from].param;
+            }
+
+            prog.size -= 5;
+            opt[2]++;
+        }
+    }
+
+    // revmoe pairs: <> +- >< -+
+    for (size_t addr = 0; (opti & OPTI_VOID) && addr < prog.size - 1; ++addr) {
+        if ((prog.code[addr    ].operand == '<' &&
+             prog.code[addr + 1].operand == '>') || 
+            (prog.code[addr    ].operand == '+' &&
+             prog.code[addr + 1].operand == '-') || 
+            (prog.code[addr    ].operand == '>' &&
+             prog.code[addr + 1].operand == '<') || 
+            (prog.code[addr    ].operand == '-' &&
+             prog.code[addr + 1].operand == '+')) { 
+
+            for (size_t to = addr, from = addr + 2; from < prog.size; ++to, ++from) {
+                prog.code[to].operand = prog.code[from].operand;
+                prog.code[to].param = prog.code[from].param;
+            }
+
+            prog.size -= 2;
+            opt[3]++;
+        }
+    }
+
+#ifdef DEBUG
+    for (size_t i = 0; i < 4; ++i) {
+        printf("Optimization %zu: %zu\n", i, opt[i]);
+    }
+#endif
+
+    return prog;
+}
+
 void check_memory(Memory* m, const size_t expected)
 {
     if (m->capacity >= expected) return;
@@ -109,10 +228,16 @@ void interprete(Program prog)
 {
     Memory m = { 0 };
     check_memory(&m, MEMORY_SIZE);
-  
+#ifdef DEBUG
+    size_t instruction_counter = 0;
+#endif
+
     size_t pointer = 0;
    
     for (size_t addr = 0; addr < prog.size; ++addr) {
+#ifdef DEBUG
+        ++instruction_counter;
+#endif
         switch(prog.code[addr].operand) {
             case '>':
                 pointer += prog.code[addr].param;
@@ -157,12 +282,27 @@ void interprete(Program prog)
                 if (m.memory[pointer] != 0)
                     addr = prog.code[addr].param;
                 break;
+
+            case 'Z':
+                m.memory[pointer] = 0;
+                break;
+
+            case 'M':
+                {
+                    const size_t dest = pointer + prog.code[addr].param;
+                    m.memory[dest] += m.memory[pointer];
+                    m.memory[pointer] = 0;
+                }
+                break;
                
             default:
                 // unreachable (comments removed from program)
         }
     }
     free(m.memory);
+#ifdef DEBUG
+    printf("Executed %zu instructions\n", instruction_counter);
+#endif
 }
 
 Program load_program(FILE* f)
@@ -210,6 +350,13 @@ void execute(Program prog)
     if (!is_balanced(prog))
         exit(EXIT_FAILURE);
 
+   /* executed instructions in mandelbrot.bg:
+    * 3 018 468 909 no optimizations
+    * 2 994 391 927 ZERO
+    * 2 702 050 882 MOVR MOVL
+    * 2 702 050 882 ZERO MORV MOVL
+    */
+    prog = optimize(prog, OPTI_ZERO | OPTI_MOVL | OPTI_MOVR | OPTI_VOID );
     precalculate_jumps(prog);
     interprete(prog);
 
@@ -232,7 +379,6 @@ void help(const char* binary)
 int main(int argc, char* argv[])
 {
     Program prog;
-   
     if (argc == 1) {
         prog = load_program(stdin);
         execute(prog);
